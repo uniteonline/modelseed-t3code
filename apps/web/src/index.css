@@ -7,6 +7,18 @@
 /* Window Controls Overlay: active when Electron exposes native titlebar control geometry. */
 @custom-variant wco (&:is(.wco, .wco *));
 
+.modelseed-login {
+  --background: #101512;
+  --foreground: #edf5ef;
+  --card: #171e19;
+  --primary: #8de5a1;
+  --primary-foreground: #102516;
+  --muted-foreground: #b6c8ba;
+  --border: #344339;
+  --input: #344339;
+  --ring: #8de5a1;
+}
+
 /* Secondary hovering pointers reveal sidebar actions on touch-primary devices. */
 @custom-variant any-hover {
   @media (any-hover: hover) {

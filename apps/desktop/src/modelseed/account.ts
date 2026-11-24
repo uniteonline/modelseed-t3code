@@ -1,16 +1,10 @@
 // @effect-diagnostics globalDate:off -- Device expiry uses the account service's wall-clock time.
+// @effect-diagnostics nodeBuiltinImport:off -- The desktop main process uses Windows' local crypto runtime.
+import * as NodeCrypto from "node:crypto";
 import * as Schema from "effect/Schema";
 
-const MODELSEED_CONSOLE = "https://console.modelseed.dev";
+export const MODELSEED_CONSOLE = "https://console.modelseed.dev";
 export const MODELSEED_API = "https://api.modelseed.dev";
-export const MODELSEED_DEVICES = MODELSEED_CONSOLE + "/devices?lng=ru";
-
-export interface DeviceAuthorization {
-  readonly deviceCode: string;
-  readonly userCode: string;
-  readonly expiresAt: number;
-  readonly interval: number;
-}
 
 export interface AccountSession {
   readonly accessToken: string;
@@ -151,6 +145,26 @@ export function createModelseedAccountClient(request: typeof fetch = fetch) {
     );
   }
 
+  async function signIn(path: string, data: object, signal?: AbortSignal) {
+    const { body } = await send(
+      path,
+      { method: "POST", headers: { Origin: MODELSEED_CONSOLE }, body: JSON.stringify(data) },
+      signal,
+    );
+    return object(body.data);
+  }
+
+  function loginHeaders(bundle: Record<string, unknown>) {
+    const user = object(bundle.user);
+    if (positiveInt(user.role) >= 10) throw ModelseedAccountError.new(403, "access_denied");
+    return {
+      Origin: MODELSEED_CONSOLE,
+      Authorization: "Bearer " + text(bundle.access_token, tokenPattern),
+      "X-Auth-Session": text(object(bundle.session).sid, idPattern),
+      "New-Api-User": String(positiveInt(user.id)),
+    };
+  }
+
   async function refresh(account: DeviceAccount, signal?: AbortSignal): Promise<DeviceAccount> {
     const { body } = await send(
       "/api/user/auth/installer/refresh",
@@ -226,37 +240,105 @@ export function createModelseedAccountClient(request: typeof fetch = fetch) {
   }
 
   return {
-    async start(label: string, signal?: AbortSignal): Promise<DeviceAuthorization> {
-      const { body } = await requestDevice("start", { platform: "windows-x64", label }, signal);
-      const data = object(body.data);
-      return {
-        deviceCode: text(data.device_code, idPattern),
-        userCode: text(
-          data.user_code,
-          /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{5}-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{5}$/,
-        ),
-        expiresAt: Date.now() + positiveInt(data.expires_in) * 1000,
-        interval: Math.max(5, positiveInt(data.interval)) * 1000,
-      };
+    async passwordLogin(username: string, password: string, signal?: AbortSignal) {
+      const { body } = await send("/api/status", {}, signal);
+      const flags = object(body.data);
+      if (flags.turnstile_check === true)
+        throw ModelseedAccountError.new(400, "browser_verification");
+      if (flags.password_login_enabled === false)
+        throw ModelseedAccountError.new(400, "password_disabled");
+      let fields: { password: string } | { password_encrypted: string; encryption_key_id: string } =
+        { password };
+      if (flags.password_login_encryption_enabled === true) {
+        const { body } = await send("/api/user/login/encryption-key", {}, signal);
+        const keyData = object(body.data);
+        const kid = text(keyData.kid, tokenPattern);
+        if (typeof keyData.public_key !== "string" || keyData.public_key.length > 4096)
+          throw ModelseedAccountError.new(502, "invalid_response");
+        const key = NodeCrypto.createPublicKey(keyData.public_key);
+        const plaintext = Buffer.from(password, "utf8");
+        const options = {
+          key,
+          padding: NodeCrypto.constants.RSA_PKCS1_OAEP_PADDING,
+          oaepHash: "sha256",
+        };
+        let encrypted: string;
+        if (plaintext.length <= (key.asymmetricKeyDetails?.modulusLength ?? 0) / 8 - 66) {
+          encrypted = NodeCrypto.publicEncrypt(options, plaintext).toString("base64");
+        } else {
+          const secret = NodeCrypto.randomBytes(32);
+          const nonce = NodeCrypto.randomBytes(12);
+          const cipher = NodeCrypto.createCipheriv("aes-256-gcm", secret, nonce);
+          cipher.setAAD(Buffer.from(`password-v2:${kid}`));
+          const payload = Buffer.concat([
+            cipher.update(plaintext),
+            cipher.final(),
+            cipher.getAuthTag(),
+          ]);
+          const wrapped = NodeCrypto.publicEncrypt(
+            { ...options, oaepLabel: Buffer.from("password-v2") },
+            secret,
+          );
+          encrypted = [
+            "v2",
+            ...[wrapped, nonce, payload].map((chunk) => chunk.toString("base64")),
+          ].join(".");
+        }
+        fields = { password_encrypted: encrypted, encryption_key_id: kid };
+      }
+      return signIn("/api/user/login", { username, ...fields }, signal);
     },
-    async poll(
-      authorization: DeviceAuthorization,
-      signal?: AbortSignal,
-    ): Promise<DeviceAccount | null> {
-      const { body } = await requestDevice(
-        "poll",
-        { device_code: authorization.deviceCode },
+    verifyLogin(flowToken: string, code: string, signal?: AbortSignal) {
+      return signIn(
+        "/api/user/login/verify",
+        { flow_token: flowToken, method: "2fa", code },
         signal,
       );
-      const data = object(body.data);
-      if (data.state === "pending") return null;
-      if (data.state !== "approved") throw ModelseedAccountError.new(502, "invalid_response");
+    },
+    async authorize(bundle: Record<string, unknown>, challenge: string, signal?: AbortSignal) {
+      const headers = loginHeaders(bundle);
+      try {
+        const result = await send(
+          "/api/installer/desktop/authorize",
+          { method: "POST", headers, body: JSON.stringify({ challenge }) },
+          signal,
+        );
+        return text(object(result.body.data).code, idPattern);
+      } finally {
+        // Release the initial password session after the app has its own authorization.
+        void send("/api/user/auth/logout", { method: "POST", headers, body: "{}" }).catch(
+          () => undefined,
+        );
+      }
+    },
+    async exchange(code: string, verifier: string, signal?: AbortSignal): Promise<DeviceAccount> {
+      const data = await signIn("/api/installer/desktop/exchange", { code, verifier }, signal);
       return {
         deviceId: text(data.device_id, idPattern),
         apiKey: text(data.api_key, tokenPattern),
         keyExpiresAt: positiveInt(data.key_expires_at),
         session: parseSession(data.session),
-        pendingAck: authorization.deviceCode,
+        pendingAck: text(data.device_code, idPattern),
+      };
+    },
+    async balance(
+      account: DeviceAccount,
+      persist: (updated: DeviceAccount) => Promise<void>,
+      signal?: AbortSignal,
+    ) {
+      const user = object(await withAccount("/api/user/self", account, persist, undefined, signal));
+      const amount = (value: unknown) => {
+        if (typeof value !== "number" || !Number.isFinite(value))
+          throw ModelseedAccountError.new(502, "invalid_response");
+        return value;
+      };
+      const name = [user.display_name, user.username, user.email].find(
+        (value): value is string => typeof value === "string" && value.trim() !== "",
+      );
+      return {
+        name: name ?? "Modelseed",
+        balanceCredits: amount(user.quota) / 500,
+        usedCredits: amount(user.used_quota) / 500,
       };
     },
     async acknowledge(account: DeviceAccount, signal?: AbortSignal): Promise<DeviceAccount> {
@@ -312,6 +394,19 @@ export function createModelseedAccountClient(request: typeof fetch = fetch) {
     },
     async pricing(signal?: AbortSignal): Promise<unknown> {
       return (await send("/api/pricing", {}, signal)).body.data;
+    },
+    async rubleRate() {
+      const { body } = await send(
+        "/fx.json",
+        {},
+        AbortSignal.timeout(4_000),
+        "https://modelseed.dev",
+      );
+      const rate = object(body.rates).RUB;
+      if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) {
+        throw ModelseedAccountError.new(502, "invalid_response");
+      }
+      return rate;
     },
   };
 }

@@ -263,6 +263,9 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   ...(process.platform === "win32"
     ? {
         signOutModelseed: () => ipcRenderer.invoke(IpcChannels.MODELSEED_SIGN_OUT_CHANNEL),
+        modelseedLogin: (action: Parameters<NonNullable<DesktopBridge["modelseedLogin"]>>[0]) =>
+          ipcRenderer.invoke(IpcChannels.MODELSEED_LOGIN_CHANNEL, action),
+        modelseedBalance: () => ipcRenderer.invoke(IpcChannels.MODELSEED_BALANCE_CHANNEL),
       }
     : {}),
   readMedia: (url: string) => ipcRenderer.invoke(IpcChannels.READ_MEDIA_CHANNEL, url),

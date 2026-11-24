@@ -23,54 +23,73 @@ const account = {
   },
 };
 
-describe("Modelseed device authentication", () => {
-  it("claims an approved account with a durable acknowledgement code", async () => {
-    const routes: string[] = [];
+describe("Modelseed account authentication", () => {
+  it("signs in using email and claims the app credentials without a pairing code", async () => {
+    const signedIn = { ...session, user: { id: account.session.userId, role: 1 } };
     const client = createModelseedAccountClient(async (input, request) => {
       const target = new URL(String(input));
       expect(target.origin).toBe("https://console.modelseed.dev");
-      expect(new Headers(request?.headers).get("origin")).toBe(target.origin);
-      routes.push(target.pathname);
-      switch (target.pathname.split("/").at(-1)) {
-        case "start":
+      const headers = new Headers(request?.headers);
+      switch (target.pathname) {
+        case "/api/status":
+          return Response.json({ data: { password_login_enabled: true } });
+        case "/api/user/login":
           expect(JSON.parse(String(request?.body))).toEqual({
-            label: "T3 Code",
-            platform: "windows-x64",
+            username: "tester@example.com",
+            password: "test-password",
+          });
+          return Response.json({ data: signedIn });
+        case "/api/installer/desktop/authorize":
+          expect(headers.get("origin")).toBe(target.origin);
+          expect(headers.get("authorization")).toBe("Bearer " + session.access_token);
+          expect(headers.get("x-auth-session")).toBe(session.session.sid);
+          expect(JSON.parse(String(request?.body))).toEqual({ challenge: "fixture-challenge" });
+          return Response.json({ data: { code: "fixture-ticket" } });
+        case "/api/user/auth/logout":
+          return Response.json({ success: true });
+        case "/api/installer/desktop/exchange":
+          expect(JSON.parse(String(request?.body))).toEqual({
+            code: "fixture-ticket",
+            verifier: "fixture-verifier",
           });
           return Response.json({
             data: {
-              device_code: "fixture-device-secret",
-              user_code: "23456-ABCDE",
-              expires_in: 600,
-              interval: 5,
-            },
-          });
-        case "poll":
-          if (routes.length === 2)
-            return Response.json({ data: { state: "pending" } }, { status: 202 });
-          return Response.json({
-            data: {
-              state: "approved",
+              device_code: "fixture-ack",
               device_id: account.deviceId,
               api_key: account.apiKey,
               key_expires_at: account.keyExpiresAt,
               session,
             },
           });
-        case "ack":
+        case "/api/installer/device/ack":
           expect(JSON.parse(String(request?.body))).toEqual({
-            device_code: "fixture-device-secret",
+            device_code: "fixture-ack",
           });
           return Response.json({ success: true });
         default:
           throw new Error("Unexpected endpoint");
       }
     });
-    const authorization = await client.start("T3 Code");
-    expect(await client.poll(authorization)).toBeNull();
-    const pending = await client.poll(authorization);
-    expect(pending).toEqual({ ...account, pendingAck: "fixture-device-secret" });
-    expect(await client.acknowledge(pending!)).toEqual(account);
+    const signedInBundle = await client.passwordLogin("tester@example.com", "test-password");
+    const grant = await client.authorize(signedInBundle, "fixture-challenge");
+    const pending = await client.exchange(grant, "fixture-verifier");
+    expect(pending).toEqual({ ...account, pendingAck: "fixture-ack" });
+    expect(await client.acknowledge(pending)).toEqual(account);
+  });
+
+  it("reads the balance and cumulative spend in Modelseed credits", async () => {
+    const client = createModelseedAccountClient(async (input, request) => {
+      expect(new URL(String(input)).pathname).toBe("/api/user/self");
+      expect(new Headers(request?.headers).get("new-api-user")).toBe("42");
+      return Response.json({
+        data: { display_name: "Test account", quota: 625_000, used_quota: 500 },
+      });
+    });
+    expect(await client.balance(account, async () => {})).toEqual({
+      name: "Test account",
+      balanceCredits: 1_250,
+      usedCredits: 1,
+    });
   });
 
   it("recovers an expired access token and persists the rotated session before retrying", async () => {

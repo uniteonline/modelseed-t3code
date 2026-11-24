@@ -7,6 +7,9 @@ import {
   DesktopThemeSchema,
   EDITORS,
   EditorId,
+  ModelseedBalance,
+  ModelseedLoginAction,
+  ModelseedLoginStatus,
   PickedThemeFileSchema,
   PickFolderOptionsSchema,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
@@ -51,7 +54,8 @@ import { safariPermissionCheck } from "../../preview/BrowserImport/SafariPermiss
 import { m } from "../../i18n/messages.ts";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
-import { signOutModelseed } from "../../modelseed/session.ts";
+import { dispatchModelseedLogin } from "../../modelseed/login.ts";
+import { getModelseedBalance, signOutModelseed } from "../../modelseed/session.ts";
 import {
   extractDistroFromUncPath,
   resolveWslPickFolderDefaultPath,
@@ -365,6 +369,20 @@ export const signOutModelseedAccount = DesktopIpc.makeIpcMethod({
   payload: Schema.Void,
   result: Schema.Void,
   handler: () => Effect.promise(signOutModelseed),
+});
+
+export const modelseedLogin = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.MODELSEED_LOGIN_CHANNEL,
+  payload: ModelseedLoginAction,
+  result: ModelseedLoginStatus,
+  handler: (action) => Effect.sync(() => dispatchModelseedLogin(action)),
+});
+
+export const modelseedBalance = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.MODELSEED_BALANCE_CHANNEL,
+  payload: Schema.Void,
+  result: Schema.NullOr(ModelseedBalance),
+  handler: () => Effect.promise(getModelseedBalance),
 });
 
 export const openExternal = DesktopIpc.makeIpcMethod({

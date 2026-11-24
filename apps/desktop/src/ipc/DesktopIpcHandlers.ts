@@ -45,6 +45,8 @@ import {
   getWindowFullscreenState,
   openExternal,
   signOutModelseedAccount,
+  modelseedLogin,
+  modelseedBalance,
   readMedia,
   restartAudioService,
   openSystemSettings,
@@ -158,6 +160,8 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(showContextMenu);
   yield* ipc.handle(openExternal);
   yield* ipc.handle(signOutModelseedAccount);
+  yield* ipc.handle(modelseedLogin);
+  yield* ipc.handle(modelseedBalance);
   yield* ipc.handle(readMedia);
   yield* ipc.handle(receiveProviderAuthCallback);
   yield* ipc.handle(cancelProviderAuthCallback);

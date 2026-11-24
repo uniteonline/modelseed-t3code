@@ -1085,9 +1085,43 @@ export type DesktopMediaRead = typeof DesktopMediaReadSchema.Type;
 export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
+export const ModelseedLoginAction = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("status") }),
+  Schema.Struct({ kind: Schema.Literal("cancel") }),
+  Schema.Struct({ kind: Schema.Literal("retry") }),
+  Schema.Struct({
+    kind: Schema.Literal("password"),
+    username: Schema.String,
+    password: Schema.String,
+  }),
+  Schema.Struct({ kind: Schema.Literal("verify"), code: Schema.String }),
+  Schema.Struct({
+    kind: Schema.Literal("oauth"),
+    provider: Schema.Literals(["github", "telegram", "account"]),
+  }),
+]);
+export type ModelseedLoginAction = typeof ModelseedLoginAction.Type;
+
+export const ModelseedLoginStatus = Schema.Struct({
+  screen: Schema.Literals(["login", "verify", "working", "browser", "retry", "ready"]),
+  message: Schema.String,
+  allowBrowser: Schema.optionalKey(Schema.Boolean),
+});
+export type ModelseedLoginStatus = typeof ModelseedLoginStatus.Type;
+
+export const ModelseedBalance = Schema.Struct({
+  name: Schema.String,
+  balanceCredits: Schema.Number,
+  usedCredits: Schema.Number,
+  rubPerUSD: Schema.NullOr(Schema.Number),
+});
+export type ModelseedBalance = typeof ModelseedBalance.Type;
+
 export interface DesktopBridge {
   getAppBranding: () => DesktopAppBranding | null;
   signOutModelseed?: () => Promise<void>;
+  modelseedLogin?: (action: ModelseedLoginAction) => Promise<ModelseedLoginStatus>;
+  modelseedBalance?: () => Promise<ModelseedBalance | null>;
   /** `null` until the desktop host has read the login shell's environment; ask again later. */
   getRelayTelemetryEnabled: () => boolean | null;
   getPathForFile: (file: File) => string;

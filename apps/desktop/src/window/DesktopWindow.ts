@@ -10,6 +10,7 @@ import * as Semaphore from "effect/Semaphore";
 
 import * as Electron from "electron";
 import { msg } from "gt-i18n";
+import { modelseedWorkspaceReady } from "../modelseed/login.ts";
 
 import { type DesktopSnapShotEvent, DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts";
 
@@ -1192,6 +1193,7 @@ export const make = Effect.gen(function* () {
     handleBackendReady: Effect.fn("desktop.window.handleBackendReady")(function* (httpBaseUrl) {
       backendHasStarted = true;
       yield* Ref.set(backendReadyRef, true);
+      if (environment.platform === "win32") yield* Effect.sync(modelseedWorkspaceReady);
       yield* logWindowInfo("backend ready", { source: "http", url: httpBaseUrl.href });
       if (!mainClosedDuringStartup) yield* createMainIfBackendReady;
     }),

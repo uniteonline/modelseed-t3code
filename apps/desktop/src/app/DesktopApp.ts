@@ -1,7 +1,7 @@
 import * as Cause from "effect/Cause";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
-import { requireModelseedLogin } from "../modelseed/session.ts";
+import { modelseedWorkspaceReady, requireModelseedLogin } from "../modelseed/login.ts";
 import { applyLanguage } from "../i18n/messages.ts";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
@@ -174,15 +174,8 @@ const stopAllPoolInstances = Effect.fn("desktop.app.stopAllPoolInstances")(
   },
 );
 
-// Spawns the local backend as soon as the protocol, IPC, and legacy storage that every window needs exist.
-const startLocalBackend = Effect.gen(function* () {
-  const state = yield* DesktopState.DesktopState;
+const prepareRenderer = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
-  const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
-  const desktopWindow = yield* DesktopWindow.DesktopWindow;
-  yield* logBootstrapInfo("bootstrap start");
-
-  const settings = yield* desktopSettings.get;
   const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
   yield* electronProtocol.registerDesktopProtocol({
     scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment),
@@ -197,9 +190,19 @@ const startLocalBackend = Effect.gen(function* () {
   yield* (yield* DesktopLegacyLocalStorage.DesktopLegacyLocalStorage).load(
     yield* (yield* DesktopAppIdentity.DesktopAppIdentity).resolveUserDataPath,
   );
+});
+
+const startLocalBackend = Effect.gen(function* () {
+  const state = yield* DesktopState.DesktopState;
+  const environment = yield* DesktopEnvironment.DesktopEnvironment;
+  const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
+  const desktopWindow = yield* DesktopWindow.DesktopWindow;
+  yield* logBootstrapInfo("bootstrap start");
+  const settings = yield* desktopSettings.get;
 
   if (!settings.localEnvironmentEnabled) {
     yield* logBootstrapInfo("bootstrap skipping local environment (disabled in settings)");
+    if (environment.platform === "win32") yield* Effect.sync(modelseedWorkspaceReady);
     return false;
   }
 
@@ -401,11 +404,6 @@ const startup = Effect.gen(function* () {
     Effect.catchCause((cause) => fatalStartupCause("whenReady", cause)),
   );
   yield* logStartupInfo("app ready");
-  const closeModelseedLogin =
-    environment.platform === "win32"
-      ? yield* Effect.promise(() => requireModelseedLogin(userDataPath))
-      : undefined;
-  if (closeModelseedLogin === null) return;
   if (environment.platform === "linux") {
     const selectedBackend = yield* safeStorage.selectedStorageBackend;
     yield* logStartupInfo("safe storage ready", {
@@ -417,6 +415,13 @@ const startup = Effect.gen(function* () {
   yield* updates.configure;
   yield* DesktopRemoteUpdates.listen;
   yield* DesktopStartupRecovery.listen;
+  yield* prepareRenderer.pipe(Effect.catchCause((cause) => fatalStartupCause("renderer", cause)));
+  if (environment.platform === "win32") {
+    const desktopWindow = yield* DesktopWindow.DesktopWindow;
+    yield* desktopWindow.ensureMain;
+    if (!(yield* Effect.promise(() => requireModelseedLogin(userDataPath)))) return;
+    yield* desktopWindow.activate;
+  }
   const backendStarted = yield* startLocalBackend.pipe(
     Effect.catchCause((cause) => fatalStartupCause("bootstrap", cause)),
   );
@@ -427,10 +432,6 @@ const startup = Effect.gen(function* () {
   yield* bootstrap(backendStarted).pipe(
     Effect.catchCause((cause) => fatalStartupCause("bootstrap", cause)),
   );
-  if (closeModelseedLogin && backendStarted) {
-    yield* (yield* DesktopWindow.DesktopWindow).ensureMain;
-    yield* Effect.sync(closeModelseedLogin);
-  }
 }).pipe(Effect.withSpan("desktop.startup"));
 
 const scopedProgram = Effect.scoped(
