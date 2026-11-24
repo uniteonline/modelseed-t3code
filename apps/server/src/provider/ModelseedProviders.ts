@@ -14,9 +14,6 @@ import type { AnyProviderDriver } from "@t3tools/provider-core/server/driver";
 
 type ModelseedBootstrap = NonNullable<DesktopBackendBootstrap["modelseed"]>;
 
-export const modelseedRussianInstructions =
-  "По умолчанию отвечай, объясняй изменения и сообщай о ходе работы на русском языке. Если пользователь явно просит другой язык, используй его.";
-
 export function modelseedProviderInstances(account: ModelseedBootstrap): ProviderInstanceConfigMap {
   const apiKey = Redacted.value(account.apiKey);
   return {
@@ -44,7 +41,6 @@ export function modelseedProviderInstances(account: ModelseedBootstrap): Provide
               binaryPath: account.claudeBinary,
               homePath: account.claudeHome,
               customModels: account.claudeModels,
-              launchArgs: `--append-system-prompt ${JSON.stringify(modelseedRussianInstructions)}`,
             },
             environment: [
               { name: "ANTHROPIC_BASE_URL", value: account.gatewayOrigin, sensitive: false },
