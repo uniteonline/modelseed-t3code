@@ -2,6 +2,7 @@ import { resolveLocale } from "@t3tools/client-runtime/locales";
 import * as Effect from "effect/Effect";
 import { decodeOptions, gtFallback } from "gt-i18n";
 import { hashMessage } from "gt-i18n/internal";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import * as ElectronApp from "../electron/ElectronApp.ts";
 
@@ -66,12 +67,15 @@ const loadCatalog = async (locale: string): Promise<Catalog> => {
 /** Activates the saved `language` client setting; "system" follows the OS language order. */
 export const applyLanguage = Effect.fn("desktop.i18n.applyLanguage")(function* (language: string) {
   const electronApp = yield* ElectronApp.ElectronApp;
-  const locale = resolveLocale(
-    language,
-    yield* electronApp.preferredSystemLanguages,
-    SUPPORTED_LOCALES,
-    DEFAULT_LOCALE,
-  );
+  const locale =
+    (yield* HostProcess.Platform) === "win32"
+      ? "ru"
+      : resolveLocale(
+          language,
+          yield* electronApp.preferredSystemLanguages,
+          SUPPORTED_LOCALES,
+          DEFAULT_LOCALE,
+        );
   requestedLocale = locale;
   if (locale === activeLocale) return;
   const catalog = yield* Effect.promise(() => loadCatalog(locale));

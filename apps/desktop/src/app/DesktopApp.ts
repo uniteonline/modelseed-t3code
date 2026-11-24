@@ -1,6 +1,8 @@
 import * as Cause from "effect/Cause";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
+import { requireModelseedLogin } from "../modelseed/session.ts";
+import { applyLanguage } from "../i18n/messages.ts";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -297,15 +299,16 @@ const bootstrap = Effect.fn("desktop.bootstrap")(function* (backendStarted: bool
   // Only the user's own login shell PATH shows every t3 a new terminal runs; a fresh install has
   // no cached one. Without it, the command is left to Settings.
   const installCli = (yield* DesktopCliCommand.DesktopCliCommand).installOnFirstLaunch;
-  yield* Effect.forkScoped(
-    (yield* DesktopShellEnvironment.DesktopShellEnvironment).awaitUserShellDiscovery.pipe(
-      Effect.flatMap((found) =>
-        found || environment.platform === "win32"
-          ? installCli
-          : logBootstrapInfo("skipped installing the t3 command without the shell PATH"),
+  if (environment.platform !== "win32")
+    yield* Effect.forkScoped(
+      (yield* DesktopShellEnvironment.DesktopShellEnvironment).awaitUserShellDiscovery.pipe(
+        Effect.flatMap((found) =>
+          found || environment.platform === "win32"
+            ? installCli
+            : logBootstrapInfo("skipped installing the t3 command without the shell PATH"),
+        ),
       ),
-    ),
-  );
+    );
 
   if (!settings.localEnvironmentEnabled) {
     // The backend config refreshes the launcher when the local environment runs; an update may move the app.
@@ -371,6 +374,10 @@ const startup = Effect.gen(function* () {
   }
   const userDataPath = yield* appIdentity.resolveUserDataPath;
   yield* electronApp.setPath("userData", userDataPath);
+  if (environment.platform === "win32") {
+    yield* electronApp.appendCommandLineSwitch("lang", "ru");
+    yield* applyLanguage("ru");
+  }
   yield* logStartupInfo("runtime logging configured", { logDir: environment.logDir });
   yield* desktopSettings.load;
 
@@ -387,13 +394,18 @@ const startup = Effect.gen(function* () {
 
   yield* appIdentity.configure;
   yield* lifecycle.register;
-  yield* clerk.configure;
+  if (environment.platform !== "win32") yield* clerk.configure;
 
   yield* electronApp.whenReady.pipe(
     Effect.withSpan("desktop.electron.whenReady"),
     Effect.catchCause((cause) => fatalStartupCause("whenReady", cause)),
   );
   yield* logStartupInfo("app ready");
+  const closeModelseedLogin =
+    environment.platform === "win32"
+      ? yield* Effect.promise(() => requireModelseedLogin(userDataPath))
+      : undefined;
+  if (closeModelseedLogin === null) return;
   if (environment.platform === "linux") {
     const selectedBackend = yield* safeStorage.selectedStorageBackend;
     yield* logStartupInfo("safe storage ready", {
@@ -415,6 +427,10 @@ const startup = Effect.gen(function* () {
   yield* bootstrap(backendStarted).pipe(
     Effect.catchCause((cause) => fatalStartupCause("bootstrap", cause)),
   );
+  if (closeModelseedLogin && backendStarted) {
+    yield* (yield* DesktopWindow.DesktopWindow).ensureMain;
+    yield* Effect.sync(closeModelseedLogin);
+  }
 }).pipe(Effect.withSpan("desktop.startup"));
 
 const scopedProgram = Effect.scoped(

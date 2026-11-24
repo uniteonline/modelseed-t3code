@@ -259,6 +259,12 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(IpcChannels.CANCEL_PROVIDER_AUTH_CALLBACK_CHANNEL, url),
   startFileDrag: (input) => ipcRenderer.invoke(IpcChannels.START_FILE_DRAG_CHANNEL, input),
   openExternal: (url: string) => ipcRenderer.invoke(IpcChannels.OPEN_EXTERNAL_CHANNEL, url),
+  // oxlint-disable-next-line t3code/no-global-process-runtime -- The sandboxed preload exposes Electron's platform without a service runtime.
+  ...(process.platform === "win32"
+    ? {
+        signOutModelseed: () => ipcRenderer.invoke(IpcChannels.MODELSEED_SIGN_OUT_CHANNEL),
+      }
+    : {}),
   readMedia: (url: string) => ipcRenderer.invoke(IpcChannels.READ_MEDIA_CHANNEL, url),
   checkSystemPermission: (pane: string) =>
     ipcRenderer.invoke(IpcChannels.CHECK_SYSTEM_PERMISSION_CHANNEL, pane),

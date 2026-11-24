@@ -184,6 +184,10 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
 }
 
 function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
+  if (window.desktopBridge?.signOutModelseed) {
+    const product = "Modelseed T3 Code";
+    return <span className="truncate text-sm font-medium tracking-tight">{product}</span>;
+  }
   return (
     <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
       <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />

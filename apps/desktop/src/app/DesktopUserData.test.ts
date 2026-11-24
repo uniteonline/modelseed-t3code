@@ -7,38 +7,30 @@ import * as PlatformError from "effect/PlatformError";
 
 import { clearStaleGpuCaches, resolveUserDataPath } from "./DesktopUserData.ts";
 
-it.effect.each(["t3code", "T3 Code (Alpha)"])(
-  "preserves Windows credential keys from %s without copying browser databases",
-  (sourceName) =>
+it.effect.each([false, true])(
+  "uses a separate Modelseed Windows profile (development=%s)",
+  (isDevelopment) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-v2-profile-" });
-      const source = path.join(directory, sourceName);
-      const destination = path.join(directory, "t3code-v2");
+      const source = path.join(directory, "t3code-v2");
+      const destination = path.join(
+        directory,
+        isDevelopment ? "modelseed-t3code-dev" : "modelseed-t3code",
+      );
       const state = '{"os_crypt":{"encrypted_key":"test-encrypted-key"}}';
-      yield* fs.makeDirectory(path.join(directory, "T3 Code (Alpha)"), { recursive: true });
       yield* fs.makeDirectory(path.join(source, "IndexedDB"), { recursive: true });
       yield* fs.writeFileString(path.join(source, "Local State"), state);
       yield* fs.writeFileString(path.join(source, "IndexedDB", "LOCK"), "V1 owns this database");
-      yield* resolveUserDataPath({
+      const profile = yield* resolveUserDataPath({
         appDataDirectory: directory,
-        isDevelopment: false,
+        isDevelopment,
         platform: "win32",
       });
-      assert.equal(yield* fs.readFileString(path.join(destination, "Local State")), state);
+      assert.equal(profile, destination);
       assert.equal(yield* fs.readFileString(path.join(source, "Local State")), state);
-      assert.isFalse(yield* fs.exists(path.join(destination, "IndexedDB")));
-      yield* fs.writeFileString(path.join(destination, "Local State"), "existing V2 state");
-      yield* resolveUserDataPath({
-        appDataDirectory: directory,
-        isDevelopment: false,
-        platform: "win32",
-      });
-      assert.equal(
-        yield* fs.readFileString(path.join(destination, "Local State")),
-        "existing V2 state",
-      );
+      assert.isFalse(yield* fs.exists(destination));
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 

@@ -51,6 +51,7 @@ import { safariPermissionCheck } from "../../preview/BrowserImport/SafariPermiss
 import { m } from "../../i18n/messages.ts";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
+import { signOutModelseed } from "../../modelseed/session.ts";
 import {
   extractDistroFromUncPath,
   resolveWslPickFolderDefaultPath,
@@ -357,6 +358,13 @@ export const showContextMenu = DesktopIpc.makeIpcMethod({
     });
     return Option.getOrNull(selectedItemId);
   }),
+});
+
+export const signOutModelseedAccount = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.MODELSEED_SIGN_OUT_CHANNEL,
+  payload: Schema.Void,
+  result: Schema.Void,
+  handler: () => Effect.promise(signOutModelseed),
 });
 
 export const openExternal = DesktopIpc.makeIpcMethod({

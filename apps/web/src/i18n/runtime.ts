@@ -53,6 +53,11 @@ function activateLocale(locale: string): void {
 }
 
 function applyLanguageSetting(): void {
+  if (window.desktopBridge?.signOutModelseed) {
+    requestedLocale = "ru";
+    void whenLocaleReady();
+    return;
+  }
   // Not desktopBridge.getSystemLocale(): that is the regional/time locale, not the UI language.
   requestedLocale = resolveLocale(
     getClientSettings().language,
@@ -65,6 +70,7 @@ function applyLanguageSetting(): void {
 
 /** GT's own locale setters write the saved setting, which stays the only source of truth. */
 export function persistGTLocale(locale: string): void {
+  if (window.desktopBridge?.signOutModelseed) return;
   void updateClientSettings({ language: locale });
 }
 

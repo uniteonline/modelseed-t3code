@@ -824,6 +824,7 @@ function AutoSettleDaysInput({
 }
 
 export function GeneralSettingsPanel() {
+  const russianLanguageLabel = "Русский";
   const gt = useGT();
   const m = useMessages();
   const setting = useSearchableSetting();
@@ -1116,50 +1117,54 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection id="display" title={gt("Display")}>
-        <SettingsRow
-          {...setting("language")}
-          description={<T>System default follows your browser or OS language.</T>}
-          resetAction={
-            settings.language !== DEFAULT_UNIFIED_SETTINGS.language ? (
-              <SettingResetButton
-                ariaLabel={gt("Reset language to default")}
-                onClick={() =>
-                  updateSettings({
-                    language: DEFAULT_UNIFIED_SETTINGS.language,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Select
-              value={languageValue}
-              onValueChange={(value) => {
-                if (value) {
-                  updateSettings({ language: value });
-                }
-              }}
-            >
-              <SelectTrigger size="sm" className="w-full sm:w-40" aria-label={gt("Language")}>
-                <SelectValue>
-                  {languageValue === SYSTEM_LANGUAGE
-                    ? m(TIMESTAMP_FORMAT_LABELS.locale)
-                    : nativeLanguageName(languageValue)}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                <SelectItem hideIndicator value={SYSTEM_LANGUAGE}>
-                  {m(TIMESTAMP_FORMAT_LABELS.locale)}
-                </SelectItem>
-                {SUPPORTED_LOCALES.map((locale) => (
-                  <SelectItem hideIndicator key={locale} value={locale}>
-                    {nativeLanguageName(locale)}
+        {window.desktopBridge?.signOutModelseed ? (
+          <SettingsRow {...setting("language")} control={<span>{russianLanguageLabel}</span>} />
+        ) : (
+          <SettingsRow
+            {...setting("language")}
+            description={<T>System default follows your browser or OS language.</T>}
+            resetAction={
+              settings.language !== DEFAULT_UNIFIED_SETTINGS.language ? (
+                <SettingResetButton
+                  ariaLabel={gt("Reset language to default")}
+                  onClick={() =>
+                    updateSettings({
+                      language: DEFAULT_UNIFIED_SETTINGS.language,
+                    })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <Select
+                value={languageValue}
+                onValueChange={(value) => {
+                  if (value) {
+                    updateSettings({ language: value });
+                  }
+                }}
+              >
+                <SelectTrigger size="sm" className="w-full sm:w-40" aria-label={gt("Language")}>
+                  <SelectValue>
+                    {languageValue === SYSTEM_LANGUAGE
+                      ? m(TIMESTAMP_FORMAT_LABELS.locale)
+                      : nativeLanguageName(languageValue)}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  <SelectItem hideIndicator value={SYSTEM_LANGUAGE}>
+                    {m(TIMESTAMP_FORMAT_LABELS.locale)}
                   </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          }
-        />
+                  {SUPPORTED_LOCALES.map((locale) => (
+                    <SelectItem hideIndicator key={locale} value={locale}>
+                      {nativeLanguageName(locale)}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            }
+          />
+        )}
         <SettingsRow
           {...setting("time-format")}
           description={<T>System default follows your browser or OS clock preference.</T>}

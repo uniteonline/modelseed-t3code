@@ -122,6 +122,7 @@ function SettingsScopeBoundary({ pathname, children }: { pathname: string; child
 }
 
 function SettingsContentLayout() {
+  const modelseedSignOutLabel = "Выйти из Modelseed";
   const gt = useGT();
   const contentArea = workspaceAreaProps("settings", 1, gt("Settings content"));
   const location = useLocation();
@@ -144,6 +145,16 @@ function SettingsContentLayout() {
                 <RestoreDeviceDefaultsButton
                   onRestored={() => setRestoreSignal((value) => value + 1)}
                 />
+              ) : null}
+              {location.pathname === "/settings/general" &&
+              window.desktopBridge?.signOutModelseed ? (
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => void window.desktopBridge?.signOutModelseed?.()}
+                >
+                  {modelseedSignOutLabel}
+                </Button>
               ) : null}
               <AppRouteModalClose />
             </div>

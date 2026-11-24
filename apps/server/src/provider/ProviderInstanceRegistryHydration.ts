@@ -31,6 +31,7 @@ import * as ProviderHostLive from "./ProviderHostLive.ts";
 import type * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import type * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
 import * as ServerConfig from "../config.ts";
+import { modelseedProviderDrivers, modelseedProviderInstances } from "./ModelseedProviders.ts";
 import type * as PortScanner from "../preview/PortScanner.ts";
 
 type ProviderInstanceRegistryHydrationEnv =
@@ -179,16 +180,20 @@ export const layer: Layer.Layer<
 > = Layer.unwrap(
   Effect.gen(function* () {
     const serverSettings = yield* Settings.ServerSettingsService;
-    yield* seedDevReplayInstance().pipe(
-      Effect.catchCause((cause) => Effect.logWarning("Dev replay agent unavailable", cause)),
-    );
+    const { modelseed } = yield* ServerConfig.ServerConfig;
+    if (!modelseed) {
+      yield* seedDevReplayInstance().pipe(
+        Effect.catchCause((cause) => Effect.logWarning("Dev replay agent unavailable", cause)),
+      );
+    }
     // Subscribe before the seed read so saves during registry construction are queued.
     const settingsChanges = yield* serverSettings.subscribeChanges;
     const initialSettings: ServerSettings | undefined = yield* serverSettings.getSettings.pipe(
       Effect.orElseSucceed(() => undefined),
     );
-    const initialConfigMap =
-      initialSettings === undefined
+    const initialConfigMap = modelseed
+      ? modelseedProviderInstances(modelseed)
+      : initialSettings === undefined
         ? ({} as ProviderInstanceConfigMap)
         : deriveProviderInstanceConfigMap(initialSettings);
 
@@ -200,7 +205,7 @@ export const layer: Layer.Layer<
     // Instances of drivers the policy leaves out stay listed, as unavailable, so their threads
     // explain why instead of losing their provider.
     const layerMutable = ProviderInstanceRegistry.layer({
-      drivers: BUILT_IN_DRIVERS,
+      drivers: modelseed ? modelseedProviderDrivers(BUILT_IN_DRIVERS, modelseed) : BUILT_IN_DRIVERS,
       configMap: initialConfigMap,
       blockedReason: (driver) =>
         ManagedProviders.disallowedDriverReason(serverSettings.managedPolicy, driver),
@@ -212,6 +217,7 @@ export const layer: Layer.Layer<
       Layer.provide(SecretResolver.layer),
     );
 
+    if (modelseed) return layerMutable;
     return layerSettingsWatcher(settingsChanges, initialSettings).pipe(
       Layer.provideMerge(layerMutable),
     );

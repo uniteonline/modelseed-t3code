@@ -31,6 +31,22 @@ export const DesktopBackendBootstrap = Schema.Struct({
   desktopBrowserFd: Schema.optionalKey(PositiveInt),
   desktopBrowserControlFd: Schema.optionalKey(PositiveInt),
   resourceMonitorPath: Schema.optionalKey(TrimmedNonEmptyString),
+  modelseed: Schema.optionalKey(
+    Schema.Struct({
+      apiKey: Schema.RedactedFromValue(TrimmedNonEmptyString),
+      gatewayOrigin: TrimmedNonEmptyString.check(
+        Schema.isPattern(/^http:\/\/127\.0\.0\.1:\d{1,5}$/),
+      ),
+      codexModels: Schema.Array(TrimmedNonEmptyString),
+      claudeModels: Schema.Array(TrimmedNonEmptyString),
+      codexBinary: TrimmedNonEmptyString,
+      claudeBinary: TrimmedNonEmptyString,
+      codexHome: TrimmedNonEmptyString,
+      claudeHome: TrimmedNonEmptyString,
+      gitPath: TrimmedNonEmptyString,
+      gitBash: TrimmedNonEmptyString,
+    }),
+  ),
 });
 
 export type DesktopBackendBootstrap = typeof DesktopBackendBootstrap.Type;

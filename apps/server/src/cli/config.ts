@@ -520,6 +520,7 @@ export const resolveServerConfig = Effect.fn("config.resolveServerConfig")(funct
     startupPresentation,
     desktopBootstrapToken,
     ...(desktopBootstrapSecret === undefined ? {} : { desktopBootstrapSecret }),
+    ...(mode === "desktop" && bootstrap?.modelseed ? { modelseed: bootstrap.modelseed } : {}),
     ...(shellEnvironmentPrepared === undefined ? {} : { shellEnvironmentPrepared }),
     desktopTelemetryFd,
     desktopTelemetryControlFd,

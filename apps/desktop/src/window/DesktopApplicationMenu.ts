@@ -13,6 +13,7 @@ import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import { applyLanguage, m, onLocaleChange } from "../i18n/messages.ts";
+import { signOutModelseed } from "../modelseed/session.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
 import * as DesktopWindow from "./DesktopWindow.ts";
@@ -258,6 +259,9 @@ export const make = Effect.gen(function* () {
                 },
                 { type: "separator" as const },
               ]),
+          ...(environment.platform === "win32"
+            ? [{ label: "Выйти из Modelseed", click: () => void signOutModelseed() }]
+            : []),
           {
             label: m(msg("Close Developer Tools")),
             accelerator: "CmdOrCtrl+W",
