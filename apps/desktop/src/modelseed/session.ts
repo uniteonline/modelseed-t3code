@@ -206,7 +206,21 @@ export async function requireModelseedLogin(userDataPath: string) {
     const gateway = await startModelseedGateway(account.apiKey);
     let tools;
     try {
-      tools = await prepareModelseedTools(userDataPath, gateway.origin, cancel.signal);
+      let lastProgress = 0;
+      tools = await prepareModelseedTools(
+        userDataPath,
+        gateway.origin,
+        cancel.signal,
+        (percent) => {
+          if (percent < 100 && percent - lastProgress < 5) return;
+          lastProgress = percent;
+          const status =
+            percent >= 100
+              ? "Проверяем и устанавливаем инструменты…"
+              : "Готовим Codex и Claude Code. Загрузка " + percent + " %.";
+          void login.show({ status }).catch(() => undefined);
+        },
+      );
       cancel.signal.throwIfAborted();
     } catch (error) {
       gateway.close();

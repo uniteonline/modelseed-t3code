@@ -185,12 +185,18 @@ function copySelection() {
 }
 
 /** Plain http has no Clipboard API, but the legacy copy command still works on a selection. */
-function copyText(target: HTMLElement, onCopied: () => void, onBlocked: (hint: string) => void) {
+function copyText(
+  target: HTMLElement,
+  onCopied: () => void,
+  onBlocked: (hint: string) => void,
+  russian = false,
+) {
   const fallback = () => {
     selectContents(target);
     if (copySelection()) return onCopied();
+    const shortcut = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘C" : "Ctrl+C";
     onBlocked(
-      /Mac|iPhone|iPad/.test(navigator.platform) ? "Press ⌘C to copy" : "Press Ctrl+C to copy",
+      russian ? "Нажмите " + shortcut + ", чтобы скопировать" : "Press " + shortcut + " to copy",
     );
   };
   const clipboard = window.isSecureContext ? navigator.clipboard : undefined;
@@ -261,6 +267,43 @@ export function showBootError(error: unknown) {
 
   const bridge = window.desktopBridge;
   const environment = readEnvironment(bridge);
+  if (bridge?.signOutModelseed) {
+    document.documentElement.lang = "ru";
+    const reload = element("button", { type: "button", textContent: "Перезагрузить" });
+    reload.addEventListener("click", () => window.location.reload());
+    const report = element("pre", {
+      id: "boot-error-details",
+      tabIndex: 0,
+      textContent: buildErrorReport(error, environment),
+    });
+    const copy = element("button", {
+      type: "button",
+      textContent: "Скопировать сведения об ошибке",
+    });
+    copy.addEventListener("click", () =>
+      copyText(
+        report,
+        () => {
+          copy.textContent = "Скопировано";
+        },
+        (hint) => {
+          copy.textContent = hint;
+        },
+        true,
+      ),
+    );
+    bootShell.replaceChildren(
+      element("div", { id: "boot-error" }, [
+        element("div", {}, [
+          element("h1", { textContent: "Не удалось запустить Modelseed T3 Code" }),
+          element("p", { textContent: "Попробуйте перезагрузить приложение." }),
+        ]),
+        element("div", { id: "boot-error-actions" }, [reload, copy]),
+        element("details", {}, [element("summary", { textContent: "Сведения об ошибке" }), report]),
+      ]),
+    );
+    return;
+  }
   const offline = !bridge && navigator.onLine === false;
 
   const status = element("span", { className: "boot-error-sr" });

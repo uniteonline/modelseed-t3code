@@ -18,12 +18,16 @@ export function modelseedCatalog(models: ReadonlyArray<string>, pricing: unknown
   const claudeModels: string[] = [];
   for (const model of models) {
     const endpoints = routes.get(model);
-    if (endpoints?.includes("openai-response") || /^(?:gpt-|codex-|o[1-9](?:-|$))/i.test(model)) {
+    if (
+      endpoints
+        ? endpoints.includes("openai-response")
+        : /^(?:gpt-|codex-|o[1-9](?:-|$))/i.test(model)
+    ) {
       if (!/image|realtime|audio|speech|transcri|embedd|moderation|tts/i.test(model)) {
         codexModels.push(model);
       }
     }
-    if (endpoints?.includes("anthropic") || /^claude[-/ ]/i.test(model)) {
+    if (endpoints ? endpoints.includes("anthropic") : /^claude[-/ ]/i.test(model)) {
       claudeModels.push(model);
     }
   }
