@@ -113,6 +113,7 @@ import { getCodexServiceTierOptionValue } from "../../codexModelOptions.ts";
 import { ServerConfig } from "../../config.ts";
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import { buildCodexAdditionalContext } from "../../provider/CodexDeveloperInstructions.ts";
+import { modelseedRussianInstructions } from "../../provider/ModelseedProviders.ts";
 import {
   describeMcpElicitation,
   toMcpElicitationResponse,
@@ -809,6 +810,7 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
     readonly hasT3Mcp?: boolean;
     readonly browserToolsAvailable?: boolean;
     readonly deviceToolsAvailable?: boolean;
+    readonly modelseedRussian?: boolean;
     /** ChatGPT token sharing does not accept service tiers. */
     readonly omitServiceTier?: boolean;
     readonly appContext?: ProviderAdapter.ProviderAdapterV2TurnInput["appContext"];
@@ -860,14 +862,22 @@ export const buildCodexTurnStartParams = Effect.fn("CodexAdapterV2.buildCodexTur
             },
           )
         : undefined;
-    const additionalContext =
-      t3Context === undefined && Object.keys(appContext).length === 0
-        ? undefined
-        : { ...t3Context, ...appContext };
+    const additionalContext = {
+      ...t3Context,
+      ...appContext,
+      ...(input.modelseedRussian === true
+        ? {
+            modelseed_language: {
+              kind: "application" as const,
+              value: modelseedRussianInstructions,
+            },
+          }
+        : {}),
+    };
     return yield* decodeCodexTurnStartParams({
       threadId: input.nativeThreadId,
       input: input.codexInput,
-      ...(additionalContext ? { additionalContext } : {}),
+      ...(Object.keys(additionalContext).length > 0 ? { additionalContext } : {}),
       cwd: input.runtimePolicy.cwd,
       model: input.modelSelection.model,
       // Catalogues can default summaries to "none", and turn/start overrides the user's config,
@@ -7625,6 +7635,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               hasT3Mcp: mcpSession !== undefined,
               browserToolsAvailable: mcpSession?.browserToolsAvailable ?? true,
               deviceToolsAvailable: mcpSession?.capabilities?.has("device") ?? false,
+              modelseedRussian: serverConfig.modelseed !== undefined,
               omitServiceTier: adapterOptions.resolveRuntime !== undefined,
               ...(turnInput.appContext === undefined ? {} : { appContext: turnInput.appContext }),
               ...(configuredReasoningSummary === undefined ? {} : { configuredReasoningSummary }),

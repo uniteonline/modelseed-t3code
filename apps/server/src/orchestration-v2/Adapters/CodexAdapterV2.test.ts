@@ -288,6 +288,7 @@ describe("CodexAdapterV2 runtime policy", () => {
         runtimePolicy: policy,
         modelSelection,
         hasT3Mcp: true,
+        modelseedRussian: true,
         appContext,
       });
       assert.deepEqual(withT3.additionalContext?.["mcp_app_todos_list_todos_item-1"], {
@@ -295,6 +296,10 @@ describe("CodexAdapterV2 runtime policy", () => {
         value: "Filtered to overdue",
       });
       assert.isDefined(withT3.additionalContext?.["t3_code_runtime"]);
+      assert.match(
+        withT3.additionalContext?.["modelseed_language"]?.value ?? "",
+        /по умолчанию.*на русском языке/i,
+      );
     }),
   );
 });
