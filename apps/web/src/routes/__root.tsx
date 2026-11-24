@@ -152,6 +152,9 @@ function RootRouteBranch() {
   const pathname = useLocation({ select: (location) => location.pathname });
   const { authGateState } = Route.useRouteContext();
   const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
+  // The Modelseed desktop login prepares both providers before opening this window.
+  const needsFirstRunSetup =
+    primaryEnvironmentAuthenticated && !window.desktopBridge?.signOutModelseed;
   // A sync IPC read; the setting only changes across a relaunch.
   const [localEnvironmentDisabled] = useState(isLocalEnvironmentDisabled);
   // Once true, stays true: a visit to /welcome means the bootstrap already chose a route.
@@ -227,7 +230,7 @@ function RootRouteBranch() {
         </>
       ) : (
         <FirstRunGate
-          enabled={primaryEnvironmentAuthenticated}
+          enabled={needsFirstRunSetup}
           hostedStatic={authGateState.status === "hosted-static"}
         >
           {appHosts}
