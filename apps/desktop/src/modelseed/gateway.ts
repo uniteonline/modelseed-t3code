@@ -21,6 +21,7 @@ const requestHeaders = [
   "anthropic-version",
   "idempotency-key",
 ];
+const claudeRequestHeaders = [...requestHeaders, "user-agent", "x-app"];
 const responseHeaders = ["content-type", "retry-after", "request-id", "x-request-id"];
 
 function respond(res: NodeHttp.ServerResponse, status: number, type: string, message: string) {
@@ -43,7 +44,10 @@ export async function startModelseedGateway(apiKey: string, request: typeof fetc
     const url = new URL(req.url ?? path, MODELSEED_API);
     if (url.pathname === "/models") url.pathname = "/v1/models";
     const headers = new Headers({ Authorization: "Bearer " + apiKey, "Accept-Language": "ru" });
-    for (const name of requestHeaders) {
+    const forwardedHeaders = path.startsWith("/v1/messages")
+      ? claudeRequestHeaders
+      : requestHeaders;
+    for (const name of forwardedHeaders) {
       const values = req.headers[name];
       if (values !== undefined)
         headers.set(name, Array.isArray(values) ? values.join(", ") : values);

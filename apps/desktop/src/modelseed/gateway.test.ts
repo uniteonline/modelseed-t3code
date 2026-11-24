@@ -7,8 +7,18 @@ it("streams to the fixed Modelseed endpoint and substitutes the device key only 
   const gateway = await startModelseedGateway("fixture-api-key", async (input, request) => {
     const url = new URL(String(input));
     expect(url.origin).toBe("https://api.modelseed.dev");
-    expect(new Headers(request?.headers).get("authorization")).toBe("Bearer fixture-api-key");
-    expect(new Headers(request?.headers).get("accept-language")).toBe("ru");
+    const headers = new Headers(request?.headers);
+    expect(headers.get("authorization")).toBe("Bearer fixture-api-key");
+    expect(headers.get("accept-language")).toBe("ru");
+    expect(headers.has("x-api-key")).toBe(false);
+    expect(headers.has("cookie")).toBe(false);
+    if (url.pathname === "/v1/messages") {
+      expect(headers.get("user-agent")).toBe("native-client-test/1.0");
+      expect(headers.get("x-app")).toBe("cli");
+    } else {
+      expect(headers.get("user-agent")).not.toBe("native-client-test/1.0");
+      expect(headers.has("x-app")).toBe(false);
+    }
     seen.push(url.pathname);
     if (request?.method === "POST")
       expect(await new Response(request.body).json()).toEqual({ stream: true });
@@ -22,7 +32,13 @@ it("streams to the fixed Modelseed endpoint and substitutes the device key only 
     for (const path of ["/v1/responses", "/v1/messages"]) {
       const response = await fetch(gateway.origin + path, {
         method: "POST",
-        headers: auth,
+        headers: {
+          ...auth,
+          "User-Agent": "native-client-test/1.0",
+          "X-App": "cli",
+          "X-Api-Key": "fixture-local-only",
+          Cookie: "local=fixture",
+        },
         body: JSON.stringify({ stream: true }),
       });
       expect(response.headers.get("content-type")).toBe("text/event-stream");
